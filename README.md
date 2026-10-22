@@ -114,9 +114,13 @@ drift** across long sittings.
 | `src/c/markers.c`       | the pure cycle/tick/half/end scheduler                |
 | `src/c/locale.c`        | system-language string tables (EN/IT/ES/FR/DE/PT)     |
 
-The scheduler is battery-friendly: it computes the next marker, sleeps an
-`app_timer` until exactly that instant, fires, and recomputes from absolute
-time — timing never accumulates error.
+Markers are driven by the same RTC-based `tick_timer_service` that updates the
+readout — there is no long per-marker timer to lose. It ticks once a minute and
+switches to once a second only when the next marker is within 60 s, so it lands
+on the exact second yet stays battery-friendly. Each tick delivers any marker
+that is due, with **catch-up**: a missed wake-up fires the latest overdue marker
+once, late, instead of dropping it, and a marker can never fire twice. Timing is
+always recomputed from absolute time, so it never accumulates error.
 
 ## Build & run
 

@@ -62,3 +62,31 @@ int next_marker_after(int elapsed, SilentSitConfig cfg, MarkerEvent *out_event) 
   if (out_event) *out_event = marker_for_elapsed((int)best, cfg);
   return (int)best;
 }
+
+// Latest marker in (after, elapsed]. Every marker is an end, a half or a tick,
+// each periodic, so the latest marker at or before `elapsed` is the largest of
+// the latest end, latest half and latest tick (the ones <= elapsed). If that is
+// not past `after` (or not positive), nothing is due. The event type again comes
+// from marker_for_elapsed() so collision precedence is shared, not re-derived.
+int latest_marker_in(int after, int elapsed, SilentSitConfig cfg, MarkerEvent *out_event) {
+  if (out_event) *out_event = MARKER_NONE;
+  int cycle = (int)cfg.duration_min * 60;
+  if (cycle <= 0 || elapsed <= 0 || elapsed <= after) return -1;
+
+  int tick = (int)cfg.interval_min * 60;
+  int half = cycle / 2;
+
+  long best = ((long)(elapsed / cycle)) * cycle;                     // latest end
+  if (elapsed >= half) {                                             // latest half
+    long h = half + ((long)(elapsed - half) / cycle) * cycle;
+    if (h > best) best = h;
+  }
+  if (tick > 0) {                                                    // latest tick
+    long t = ((long)(elapsed / tick)) * tick;
+    if (t > best) best = t;
+  }
+
+  if (best <= 0 || best <= after) return -1;
+  if (out_event) *out_event = marker_for_elapsed((int)best, cfg);
+  return (int)best;
+}

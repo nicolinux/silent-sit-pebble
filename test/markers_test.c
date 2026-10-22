@@ -178,6 +178,78 @@ static void test_no_cycle(void) {
   CHECK(next_marker_after(0, cfg, NULL) == -1);
 }
 
+static void test_latest_marker_in(void) {
+  SilentSitConfig cfg = make_cfg(60, 0);   // 1800 HALF, 3600 END, 5400 HALF ...
+  MarkerEvent ev = MARKER_NONE;
+
+  // None due.
+  CHECK(latest_marker_in(0, 1799, cfg, &ev) == -1);
+  CHECK(ev == MARKER_NONE);
+  CHECK(latest_marker_in(0, 0, cfg, &ev) == -1);
+  CHECK(latest_marker_in(1800, 3599, cfg, &ev) == -1);
+
+  // Exactly one due; boundary m == elapsed included, m == after excluded.
+  CHECK(latest_marker_in(0, 1800, cfg, &ev) == 1800);
+  CHECK(ev == MARKER_HALF);
+  CHECK(latest_marker_in(1799, 1800, cfg, &ev) == 1800);
+  CHECK(latest_marker_in(1800, 1801, cfg, &ev) == -1);
+  CHECK(latest_marker_in(1800, 3600, cfg, &ev) == 3600);
+  CHECK(ev == MARKER_END);
+
+  // after == elapsed (or after > elapsed, e.g. clock stepped back): nothing.
+  CHECK(latest_marker_in(3600, 3600, cfg, &ev) == -1);
+  CHECK(latest_marker_in(4000, 3700, cfg, &ev) == -1);
+  CHECK(ev == MARKER_NONE);
+
+  // Several due: only the latest is returned, with its own event.
+  CHECK(latest_marker_in(0, 3700, cfg, &ev) == 3600);
+  CHECK(ev == MARKER_END);
+  CHECK(latest_marker_in(0, 5500, cfg, &ev) == 5400);
+  CHECK(ev == MARKER_HALF);
+
+  // Ticks: 60/10 -> markers every 600 s; precedence at collisions.
+  SilentSitConfig t = make_cfg(60, 10);
+  CHECK(latest_marker_in(0, 1000, t, &ev) == 600);
+  CHECK(ev == MARKER_TICK);
+  CHECK(latest_marker_in(0, 1850, t, &ev) == 1800);
+  CHECK(ev == MARKER_HALF);                       // half beats the coincident tick
+  CHECK(latest_marker_in(0, 3650, t, &ev) == 3600);
+  CHECK(ev == MARKER_END);                        // end beats the coincident tick
+  CHECK(latest_marker_in(3000, 3500, t, &ev) == -1);   // 3000 excluded, 3600 not yet
+
+  // Multi-hour gap stays correct and is O(1).
+  CHECK(latest_marker_in(0, 36000 + 5, cfg, &ev) == 36000);   // 10 h
+  CHECK(ev == MARKER_END);
+  CHECK(latest_marker_in(0, 36000 + 1805, cfg, &ev) == 37800);
+  CHECK(ev == MARKER_HALF);
+
+  // Cross-check against brute force over next_marker_after() for every config.
+  static const int durations[] = {10, 15, 20, 30, 45, 60};
+  static const int intervals[] = {0, 10, 30};
+  for (unsigned d = 0; d < 6; d++) {
+    for (unsigned i = 0; i < 3; i++) {
+      SilentSitConfig c = make_cfg(durations[d], intervals[i]);
+      for (int after = 0; after <= 7200; after += 137) {
+        for (int el = after; el <= after + 4000; el += 61) {
+          int want = -1;
+          MarkerEvent wev = MARKER_NONE;
+          for (int m = next_marker_after(after, c, NULL); m >= 0 && m <= el;
+               m = next_marker_after(m, c, NULL)) {
+            want = m;
+            wev = marker_for_elapsed(m, c);
+          }
+          int got = latest_marker_in(after, el, c, &ev);
+          CHECK(got == want);
+          CHECK(ev == wev);
+        }
+      }
+    }
+  }
+
+  // No cycle.
+  CHECK(latest_marker_in(0, 5000, make_cfg(0, 10), &ev) == -1);
+}
+
 int main(void) {
   test_known_sequences();
   test_full_sequences();
@@ -185,6 +257,7 @@ int main(void) {
   test_none_cases();
   test_strictly_greater();
   test_no_cycle();
+  test_latest_marker_in();
 
   if (g_failures) {
     printf("FAILED: %d of %d checks\n", g_failures, g_checks);

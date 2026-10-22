@@ -13,13 +13,20 @@
 // The display never resets across cycle loops; the cycle markers do (handled by
 // markers.c). Timekeeping is anchored to absolute time(NULL) for zero drift.
 //
-// Battery-friendly scheduling (scoping §4, "approach B"): instead of waking
-// every second, we keep two sparse timers —
-//   * a MINUTE_UNIT tick that refreshes the "N min" readout, and
-//   * a single app_timer armed to fire at exactly the next marker; on fire it
-//     vibrates and re-arms for the following marker.
-// Each re-arm recomputes the delay from absolute elapsed time, so a late timer
-// self-corrects and nothing accumulates drift.
+// Scheduling: the readout and the markers share ONE mechanism, the RTC-driven
+// tick_timer_service (the same one that reliably keeps the readout counting).
+// There is no marker app_timer: a lost long timer used to drop that marker and
+// every later one. Instead service_session() runs on every tick and:
+//   * refreshes the "N min" readout;
+//   * delivers any marker that is due, with CATCH-UP — it fires the latest marker
+//     in (s_last_marker_sec, elapsed] once, so a missed wake-up delivers late
+//     instead of never, and a marker second can never fire twice (even if the
+//     wall clock steps backwards);
+//   * picks the tick unit: MINUTE_UNIT normally (cheap, one wake per minute), but
+//     SECOND_UNIT once the next marker is <= 60 s away so it lands on its exact
+//     second. Minute ticks are 60 s apart, so a marker > 60 s away at one tick is
+//     still in the future at the next — it can never be overshot.
+// Everything derives from absolute elapsed time, so nothing accumulates drift.
 
 typedef enum { S_RUNNING, S_CONFIRM, S_SUMMARY } SessionState;
 
@@ -34,8 +41,8 @@ static time_t  s_start_time;        // time(NULL) at start — the drift anchor
 static int     s_last_shown_min;    // last minute drawn (redraw only on change)
 static bool    s_quiet_active;      // Quiet Time on at start -> show indicator
 static AppTimer *s_confirm_timer;   // auto-cancels the CONFIRM prompt
-static AppTimer *s_marker_timer;    // fires at the next cycle marker
-static MarkerEvent s_next_event;    // the marker s_marker_timer will deliver
+static int     s_last_marker_sec;   // elapsed second of the last marker delivered
+static TimeUnits s_tick_unit;       // unit currently subscribed (0 = none)
 static Animation *s_summary_anim;   // the "breath" played when SUMMARY appears
 static AppTimer *s_status_swap_timer; // alternates the summary status line
 static bool      s_status_showing_total;
@@ -116,18 +123,20 @@ static void update_minutes(int elapsed) {
   }
 }
 
-static void fire_marker(MarkerEvent ev, int elapsed) {
+// The single place a marker is delivered. `due` is the marker's own second,
+// `elapsed` when it actually fired (later than `due` after a missed wake-up).
+static void fire_marker(MarkerEvent ev, int due, int elapsed) {
   switch (ev) {
     case MARKER_END:
-      APP_LOG(APP_LOG_LEVEL_DEBUG, "marker END @ %ds", elapsed);
+      APP_LOG(APP_LOG_LEVEL_DEBUG, "marker END @ %ds (due %ds)", elapsed, due);
       vibe_end();
       break;
     case MARKER_HALF:
-      APP_LOG(APP_LOG_LEVEL_DEBUG, "marker HALF @ %ds", elapsed);
+      APP_LOG(APP_LOG_LEVEL_DEBUG, "marker HALF @ %ds (due %ds)", elapsed, due);
       vibe_half();
       break;
     case MARKER_TICK:
-      APP_LOG(APP_LOG_LEVEL_DEBUG, "marker TICK @ %ds", elapsed);
+      APP_LOG(APP_LOG_LEVEL_DEBUG, "marker TICK @ %ds (due %ds)", elapsed, due);
       vibe_tick();
       break;
     case MARKER_NONE:
@@ -135,28 +144,43 @@ static void fire_marker(MarkerEvent ev, int elapsed) {
   }
 }
 
-// --- Marker scheduler (app_timer to the next event) ---------------------------
+// --- Marker scheduler (tick_timer_service + catch-up) ------------------------
 
-static void marker_timer_cb(void *data);
+static void tick_handler(struct tm *tick_time, TimeUnits units_changed);
 
-static void schedule_next_marker(void) {
-  int elapsed = (int)(time(NULL) - s_start_time);
-  if (elapsed < 0) elapsed = 0;
-
-  int when = next_marker_after(elapsed, g_config, &s_next_event);
-  if (when < 0) return;   // no cycle (shouldn't happen: duration is always > 0)
-
-  int delay_ms = (when - elapsed) * 1000;
-  if (delay_ms < 1) delay_ms = 1;
-  s_marker_timer = app_timer_register((uint32_t)delay_ms, marker_timer_cb, NULL);
+// Subscribe at `unit`, but only when it actually changes (resubscribing each
+// tick would be needless churn).
+static void set_tick_unit(TimeUnits unit) {
+  if (unit == s_tick_unit) return;
+  s_tick_unit = unit;
+  tick_timer_service_subscribe(unit, tick_handler);
 }
 
-static void marker_timer_cb(void *data) {
-  s_marker_timer = NULL;
+static void stop_ticking(void) {
+  tick_timer_service_unsubscribe();
+  s_tick_unit = 0;
+}
+
+// Runs from window_load and every tick: readout, due marker (once, latest
+// wins), then the tick unit for the next marker. Markers keep running in
+// S_CONFIRM; enter_summary()/window_unload() stop the ticks.
+static void service_session(void) {
   int elapsed = (int)(time(NULL) - s_start_time);
-  fire_marker(s_next_event, elapsed);
-  update_minutes(elapsed);     // keep the readout fresh right after a marker
-  schedule_next_marker();      // re-arm from absolute time -> self-correcting
+  if (elapsed < 0) elapsed = 0;
+  update_minutes(elapsed);
+
+  MarkerEvent ev;
+  int due = latest_marker_in(s_last_marker_sec, elapsed, g_config, &ev);
+  if (due >= 0) {
+    fire_marker(ev, due, elapsed);
+    s_last_marker_sec = due;
+  }
+
+  // Next marker after whichever is later: now, or the last one delivered (the
+  // clock may have stepped back below s_last_marker_sec).
+  int from = (elapsed > s_last_marker_sec) ? elapsed : s_last_marker_sec;
+  int next = next_marker_after(from, g_config, NULL);
+  set_tick_unit((next >= 0 && next - elapsed <= 60) ? SECOND_UNIT : MINUTE_UNIT);
 }
 
 // --- Summary "breath" (an expanding ripple behind the number) -----------------
@@ -252,8 +276,7 @@ static void summary_status_swap(void *data) {
 }
 
 static void enter_summary(void) {
-  tick_timer_service_unsubscribe();
-  if (s_marker_timer)  { app_timer_cancel(s_marker_timer);  s_marker_timer = NULL; }
+  stop_ticking();
   if (s_confirm_timer) { app_timer_cancel(s_confirm_timer); s_confirm_timer = NULL; }
 
   int elapsed_sec = (int)(time(NULL) - s_start_time);
@@ -283,12 +306,10 @@ static void confirm_timeout(void *data) {
   }
 }
 
-// --- Per-minute display tick (cheap: one wake per minute) ---------------------
+// --- Tick (minute normally, second near a marker) -----------------------------
 
 static void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
-  int elapsed = (int)(time(NULL) - s_start_time);
-  if (elapsed < 0) elapsed = 0;
-  update_minutes(elapsed);
+  service_session();
 }
 
 // --- Buttons ------------------------------------------------------------------
@@ -394,16 +415,18 @@ static void window_load(Window *window) {
   s_last_shown_min = -1;
   s_quiet_active = quiet_time_is_active();
 
-  update_minutes((int)(time(NULL) - s_start_time));   // show elapsed immediately
-  show_status(s_quiet_active ? L(MSG_QUIET_ACTIVE) : "");
+  // Markers at or before the starting elapsed count as delivered: 0 in a normal
+  // build, but a fake-elapsed screenshot build must not buzz for "missed" ones.
+  int start_elapsed = (int)(time(NULL) - s_start_time);
+  s_last_marker_sec = start_elapsed > 0 ? start_elapsed : 0;
+  s_tick_unit = 0;
 
-  tick_timer_service_subscribe(MINUTE_UNIT, tick_handler);  // display only
-  schedule_next_marker();                                   // arm first marker
+  show_status(s_quiet_active ? L(MSG_QUIET_ACTIVE) : "");
+  service_session();   // show elapsed immediately and pick the first tick unit
 }
 
 static void window_unload(Window *window) {
-  tick_timer_service_unsubscribe();
-  if (s_marker_timer)  { app_timer_cancel(s_marker_timer);  s_marker_timer = NULL; }
+  stop_ticking();
   if (s_confirm_timer) { app_timer_cancel(s_confirm_timer); s_confirm_timer = NULL; }
   if (s_status_swap_timer) { app_timer_cancel(s_status_swap_timer); s_status_swap_timer = NULL; }
   // Stop the ripple (fires teardown synchronously) before its layer is freed.

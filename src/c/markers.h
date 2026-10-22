@@ -36,7 +36,14 @@ MarkerEvent marker_for_elapsed(int elapsed, SilentSitConfig cfg);
 // The elapsed-second of the next marker strictly after `elapsed`, with its
 // event type written to *out_event (precedence applied, so a tick coinciding
 // with half/end yields HALF/END). Returns -1 if the config has no cycle.
-// This drives the battery-friendly scheduler: compute the next event, sleep an
-// app_timer until exactly then, fire, repeat — recomputing from absolute time
-// each step so timing never drifts.
+// This tells the runtime how close the next marker is (to pick the tick-service
+// unit) and what it will be, always recomputed from absolute time so timing
+// never drifts.
 int next_marker_after(int elapsed, SilentSitConfig cfg, MarkerEvent *out_event);
+
+// The latest marker second m with after < m <= elapsed, or -1 if none; its
+// event (precedence applied) goes to *out_event. Drives catch-up: a marker
+// whose wake-up was missed is still found and delivered (once) late. Computed
+// directly (latest end, half and tick at or before `elapsed`, take the max), so
+// it is O(1) however long the gap — no looping over missed markers.
+int latest_marker_in(int after, int elapsed, SilentSitConfig cfg, MarkerEvent *out_event);
