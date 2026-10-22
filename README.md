@@ -31,14 +31,14 @@ that repeats for as long as you sit, without breaking the rhythm.
 
 - The **home screen** leads with the primary action — **▶ Start session** — and
   shows your current configuration beneath it (e.g. `30 min, a tick every
-  10 min`). A single press of **Select** starts the sitting right away: the
+  10 min`, with `, halfway buzz` appended only when that setting is on). A single press of **Select** starts the sitting right away: the
   common case ("same as yesterday") is one gesture. The small title at the top
   quietly alternates between the app name and your lifetime total of time
   meditated with the app.
 - Press **Down** to open **settings**, a short menu to cycle the **duration**
   (10 / 15 / 20 / 30 / 45 / 60 min), **tick interval** (10 min / 30 min / off),
-  the **halfway buzz** (on / off, default off), and **vibration strength** (Light / Medium / Strong). **Select** cycles a
-  value; **Back** returns to the home screen with its summary updated. A final
+  the **halfway buzz** (on / off, default off), and **vibration strength**
+  (Light / Medium / Strong). **Select** cycles a value; **Back** returns to the home screen with its summary updated. A final
   row resets the lifetime total — a two-press confirm guards against a stray tap.
 - The configuration and the lifetime total are **persisted** and survive closing
   the app and rebooting the watch.
@@ -57,7 +57,7 @@ that repeats for as long as you sit, without breaking the rhythm.
 | Event           | Pattern                        | When                          |
 |-----------------|--------------------------------|-------------------------------|
 | Periodic tick   | brief tap (single)             | every 10 or 30 min            |
-| Mid-cycle       | medium double                  | halfway through the cycle     |
+| Mid-cycle       | medium double                  | halfway through the cycle — optional, **off by default** ("Halfway buzz" setting) |
 | End of cycle    | two long "gong" pulses, then restart | the sitting does **not** stop |
 
 The three patterns are deliberately distinct in rhythm (intensity is fixed by
@@ -97,24 +97,6 @@ one more block plus a line in the prefix map. Universal tokens (`min`, `tick`,
 `off`, the `Select` button name, the `Quiet Time` feature name) are intentionally
 left untranslated.
 
-### Diagnostics build
-
-To check on a real watch that every marker arrives, build a test version that
-logs the last session on the watch itself (no phone or laptop needed):
-
-```sh
-MARKER_DIAG=1 pebble build            # build/silent-sit-pebble.pbw, with the log compiled in
-```
-
-Sideload it on iPhone by AirDropping the `.pbw` to the phone and opening it in
-the Pebble app. Sit as usual, stop with Back twice, then press **Down** on the
-summary screen: a scrollable list shows `start 07:02`, each marker as
-`30:00 HALF` / `60:00 END` (with `late 105s` when it was delivered after its
-due second), and `stop 72:10`. An `ABORT` line means the session window closed
-without a stop; no stop line at all means the app was killed. The log is kept
-across app restarts until the next session starts. Normal builds (without
-`MARKER_DIAG=1`) contain none of this.
-
 ## Architecture
 
 The behavioural core is a single **pure function** of `(elapsed seconds,
@@ -126,7 +108,7 @@ drift** across long sittings.
 |-------------------------|-------------------------------------------------------|
 | `src/c/main.c`          | config + lifetime total (load/save) and the navigation router |
 | `src/c/setup_window.c`  | home screen (Start action + config summary + Down)    |
-| `src/c/settings_window.c`| the settings menu — duration, tick, vibration, reset (reached with Down) |
+| `src/c/settings_window.c`| the settings menu — duration, tick, halfway buzz, vibration, reset (reached with Down) |
 | `src/c/quiet_window.c`  | the "turn on Quiet Time" reminder                     |
 | `src/c/session_window.c`| the running session, confirm-stop, summary            |
 | `src/c/markers.c`       | the pure cycle/tick/half/end scheduler                |
@@ -152,8 +134,8 @@ pebble install --phone <ip>           # install on a watch
 pebble install --cloudpebble          # install via the CloudPebble connection
 ```
 
-There is no unit-test framework for Pebble: verify by running in the emulator
-and taking screenshots.
+There is no unit-test framework for Pebble: verify the app by running it in the
+emulator and taking screenshots; the pure scheduler has host tests (below).
 
 ### Host tests
 
@@ -166,6 +148,24 @@ tools/test-markers.sh                 # compiles test/markers_test.c + markers.c
 
 `test/pebble.h` is a stub of `<pebble.h>`; `test/` is not part of the watch
 build (`wscript` only globs `src/c/**/*.c`).
+
+### Diagnostics build
+
+To check on a real watch that every marker arrives, build a test version that
+logs the last session on the watch itself (no phone or laptop needed):
+
+```sh
+MARKER_DIAG=1 pebble build            # build/silent-sit-pebble.pbw, with the log compiled in
+```
+
+Sideload it on iPhone by AirDropping the `.pbw` to the phone and opening it in
+the Pebble app. Sit as usual, stop with Back twice, then press **Down** on the
+summary screen: a scrollable list shows `start 07:02`, each marker as
+`30:00 HALF` / `60:00 END` (with `late 105s` when it was delivered after its
+due second), and `stop 72:10`. An `ABORT` line means the session window closed
+without a stop; no stop line at all means the app was killed. The log is kept
+across app restarts until the next session starts. Normal builds (without
+`MARKER_DIAG=1`) contain none of this.
 
 ## Publishing to the appstore
 
@@ -184,7 +184,7 @@ screenshots in `screenshots/emery/`:
 pebble publish \
   --non-interactive \
   --name "Silent Sit" \
-  --version 1.0.0 \
+  --version 1.2.0 \
   --category health \
   --description "$(cat STORE.txt)" \
   --release-notes "First release" \
@@ -220,7 +220,7 @@ After a successful publish, tag the released commit so the appstore version maps
 to a point in history, then push the tag:
 
 ```sh
-git tag -a v1.1.0 -m "Silent Sit 1.1.0"   # match the published --version
+git tag -a v1.2.0 -m "Silent Sit 1.2.0"   # match the published --version
 git push origin main --follow-tags         # push commits and the new tag(s)
 ```
 
@@ -289,8 +289,8 @@ stays a bitmap — Pebble menu icons can't be PDC.
 
 ## Scope
 
-In: silent tactile timer, looping cycles, periodic/half/end markers, adjustable
-vibration strength, persisted preset, a single lifetime total, Quiet-Time
+In: silent tactile timer, looping cycles, periodic/end markers plus an optional halfway buzz,
+adjustable vibration strength, persisted preset, a single lifetime total, Quiet-Time
 detection, stop-with-summary.
 
 Out (deliberately): audio/bells, streaks/history/charts, accounts/cloud, a

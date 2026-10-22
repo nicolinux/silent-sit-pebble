@@ -8,7 +8,7 @@
 # (it splits the basename on the first "_"), so `--screenshots
 # screenshots/emery/*.png` works with no renaming.
 #   emery_01-home.png         home screen: Inizia · 30 min · tick 10 min + Down caret
-#   emery_02-settings.png     settings menu (duration / tick interval)
+#   emery_02-settings.png     settings menu (duration / tick interval / halfway buzz / vibration)
 #   emery_03-quiet-time.png   "turn on Quiet Time" reminder
 #   emery_04-meditation.png   running seduta, ~12 min elapsed (non-zero readout)
 #   emery_05-summary.png      "Session ended", 12 min total, ripple bloom behind it
@@ -89,7 +89,7 @@ sleep 1.5
 
 log "capturing screens"
 shot 01-home                  # home: Inizia · 30 min · tick 10 min + Down caret
-press down                    # Down -> settings menu (duration / tick interval)
+press down                    # Down -> settings menu (duration / tick interval / halfway buzz / vibration)
 shot 02-settings
 press back                    # back to home
 press select                  # Start -> Quiet Time reminder (Quiet Time off in emu)

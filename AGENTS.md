@@ -15,6 +15,7 @@ Read [`README.md`](README.md) first — it is the source of truth for behaviour,
 | Task | Command |
 |------|---------|
 | Build | `pebble build` (waf / `wscript`) |
+| Diagnostics build (on-watch marker log) | `MARKER_DIAG=1 pebble build` — see [README → Diagnostics build](README.md#diagnostics-build) |
 | Run in emulator | `pebble install --emulator emery` |
 | Install on watch | `pebble install --phone <ip>` |
 | Host unit tests (markers.c) | `tools/test-markers.sh` |
@@ -28,10 +29,12 @@ Read [`README.md`](README.md) first — it is the source of truth for behaviour,
 |------|----------------|
 | `src/c/main.c` | config load/save + navigation router |
 | `src/c/setup_window.c` | home screen (Start action + config summary) |
-| `src/c/settings_window.c` | duration / tick-interval menu |
+| `src/c/settings_window.c` | duration / tick / halfway buzz / vibration menu |
 | `src/c/quiet_window.c` | "turn on Quiet Time" reminder |
 | `src/c/session_window.c` | running session, confirm-stop, summary |
 | `src/c/markers.c` | pure cycle/tick/half/end scheduler |
+| `src/c/diag.c` | marker diagnostics log, only in `MARKER_DIAG=1 pebble build` |
+| `test/` | host-side unit tests + `<pebble.h>` stub for `markers.c` (not part of the watch build) |
 | `src/c/locale.c` | system-language string tables (EN/IT/ES/FR/DE/PT) |
 | `resources/` | icon, PDC vectors + their SVG masters, font |
 | `wscript` | waf build rules (incl. `SCREENSHOT_FAKE_ELAPSED` define) |
@@ -43,7 +46,7 @@ Read [`README.md`](README.md) first — it is the source of truth for behaviour,
 - **Marker timing is a pure function** of `(elapsed seconds, config)` — every tick/half/end and the infinite loop derive from absolute elapsed time (zero drift). Keep new timing logic in `markers.c` and keep it pure; don't accumulate time across timers.
 - **Precedence is `end > half > tick`** when markers collide on the same instant.
 - **Localization**: user-facing strings go in `src/c/locale.c` (one table per language) plus a line in the prefix map. Universal tokens (`min`, `tick`, `off`, `Select`, `Quiet Time`) stay untranslated.
-- **No test framework** for Pebble — verify by running in the emulator + screenshots. The pure `markers.c` can be compiled/checked on the host.
+- **No test framework** for Pebble — verify by running in the emulator + screenshots. The pure `markers.c` is unit-tested on the host with `tools/test-markers.sh`.
 - **To exercise the app in the emulator, drive it through `tools/generate-screenshots.sh` (or a script derived from it), not raw `pebble install` + manual clicks.** That script already encodes the reliable recipe: hard-reset of the flaky pypkjs↔QEMU relay, factory-reset of persisted state, `SCREENSHOT_FAKE_ELAPSED` for a non-zero readout without waiting, scripted `pebble emu-button` presses through every screen, and retry-on-`TimeoutError` around `pebble screenshot`. To test a different flow, copy it and change the `press`/`shot` sequence rather than reinventing the emulator plumbing.
 - **Target platform is `emery` only** (see `targetPlatforms` in `package.json`).
 - **Publishing has sharp edges** documented in the README: screenshot filenames must start with `<platform>_`; `--category` must be one of the fixed set (`health` here); each `--version` must be unique and increasing (bump `package.json`).
