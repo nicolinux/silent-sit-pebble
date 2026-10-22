@@ -17,6 +17,7 @@ Read [`README.md`](README.md) first — it is the source of truth for behaviour,
 | Build | `pebble build` (waf / `wscript`) |
 | Run in emulator | `pebble install --emulator emery` |
 | Install on watch | `pebble install --phone <ip>` |
+| Host unit tests (markers.c) | `tools/test-markers.sh` |
 | Regenerate store screenshots | `tools/generate-screenshots.sh` |
 | Regenerate PDC vector glyphs | `tools/generate-pdc.sh` |
 | Publish to appstore | see [README → Publishing](README.md#publishing-to-the-appstore) |

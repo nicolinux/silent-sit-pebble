@@ -130,8 +130,19 @@ pebble install --cloudpebble          # install via the CloudPebble connection
 ```
 
 There is no unit-test framework for Pebble: verify by running in the emulator
-and taking screenshots. (The marker logic, being a pure function, can also be
-checked by compiling `markers.c` on the host.)
+and taking screenshots.
+
+### Host tests
+
+The marker scheduler (`src/c/markers.c`) is a pure function, so it has plain-C
+unit tests that run on the host with the system `cc` (no Pebble SDK needed):
+
+```sh
+tools/test-markers.sh                 # compiles test/markers_test.c + markers.c and runs it
+```
+
+`test/pebble.h` is a stub of `<pebble.h>`; `test/` is not part of the watch
+build (`wscript` only globs `src/c/**/*.c`).
 
 ## Publishing to the appstore
 
