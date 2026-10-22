@@ -34,6 +34,10 @@ def build(ctx):
     # builds -> no define -> the #ifdef in session_window.c compiles to nothing.
     fake_elapsed = os.environ.get('SCREENSHOT_FAKE_ELAPSED')
 
+    # Diagnostics builds: MARKER_DIAG=1 compiles in the on-watch marker log
+    # (src/c/diag.c). Absent in normal builds -> no define -> it compiles away.
+    marker_diag = os.environ.get('MARKER_DIAG') == '1'
+
     cached_env = ctx.env
     for platform in ctx.env.TARGET_PLATFORMS:
         ctx.env = ctx.all_envs[platform]
@@ -41,6 +45,8 @@ def build(ctx):
         if fake_elapsed:
             ctx.env.append_value('CFLAGS',
                                  '-DSCREENSHOT_FAKE_ELAPSED={}'.format(int(fake_elapsed)))
+        if marker_diag:
+            ctx.env.append_value('CFLAGS', '-DMARKER_DIAG')
         app_elf = '{}/pebble-app.elf'.format(ctx.env.BUILD_DIR)
         ctx.pbl_build(source=ctx.path.ant_glob('src/c/**/*.c'), target=app_elf, bin_type='app')
 

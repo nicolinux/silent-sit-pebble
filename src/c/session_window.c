@@ -2,6 +2,7 @@
 #include "app.h"
 #include "markers.h"
 #include "locale.h"
+#include "diag.h"
 
 // The RUNNING screen. One window, three internal states:
 //
@@ -132,6 +133,7 @@ static void update_minutes(int elapsed) {
 // The single place a marker is delivered. `due` is the marker's own second,
 // `elapsed` when it actually fired (later than `due` after a missed wake-up).
 static void fire_marker(MarkerEvent ev, int due, int elapsed) {
+  diag_marker(ev, due, elapsed);   // no-op unless a MARKER_DIAG build
   switch (ev) {
     case MARKER_END:
       APP_LOG(APP_LOG_LEVEL_DEBUG, "marker END @ %ds (due %ds)", elapsed, due);
@@ -289,6 +291,7 @@ static void enter_summary(void) {
   if (elapsed_sec < 0) elapsed_sec = 0;
   meditation_add_seconds((uint32_t)elapsed_sec);   // fold into the lifetime tally
 
+  diag_stop(elapsed_sec);
   int total_min = elapsed_sec / 60;
   s_state = S_SUMMARY;
 
@@ -345,9 +348,19 @@ static void select_handler(ClickRecognizerRef recognizer, void *context) {
   }
 }
 
+#ifdef MARKER_DIAG
+// Diagnostics builds only: Down on the summary opens the marker log.
+static void down_handler(ClickRecognizerRef recognizer, void *context) {
+  if (s_state == S_SUMMARY) diag_window_push();
+}
+#endif
+
 static void click_config_provider(void *context) {
   window_single_click_subscribe(BUTTON_ID_BACK, back_handler);
   window_single_click_subscribe(BUTTON_ID_SELECT, select_handler);
+#ifdef MARKER_DIAG
+  window_single_click_subscribe(BUTTON_ID_DOWN, down_handler);
+#endif
 }
 
 // --- Window lifecycle ---------------------------------------------------------
@@ -427,11 +440,16 @@ static void window_load(Window *window) {
   s_last_marker_sec = start_elapsed > 0 ? start_elapsed : 0;
   s_tick_unit = 0;
 
+  diag_session_start(s_start_time, s_last_marker_sec);
   show_status(s_quiet_active ? L(MSG_QUIET_ACTIVE) : "");
   service_session();   // show elapsed immediately and pick the first tick unit
 }
 
 static void window_unload(Window *window) {
+#ifdef MARKER_DIAG
+  int elapsed = (int)(time(NULL) - s_start_time);
+  diag_close(elapsed < 0 ? 0 : elapsed);   // logs an abnormal exit if STOP never came
+#endif
   stop_ticking();
   if (s_confirm_timer) { app_timer_cancel(s_confirm_timer); s_confirm_timer = NULL; }
   if (s_status_swap_timer) { app_timer_cancel(s_status_swap_timer); s_status_swap_timer = NULL; }

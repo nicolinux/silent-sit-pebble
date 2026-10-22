@@ -97,6 +97,24 @@ one more block plus a line in the prefix map. Universal tokens (`min`, `tick`,
 `off`, the `Select` button name, the `Quiet Time` feature name) are intentionally
 left untranslated.
 
+### Diagnostics build
+
+To check on a real watch that every marker arrives, build a test version that
+logs the last session on the watch itself (no phone or laptop needed):
+
+```sh
+MARKER_DIAG=1 pebble build            # build/silent-sit-pebble.pbw, with the log compiled in
+```
+
+Sideload it on iPhone by AirDropping the `.pbw` to the phone and opening it in
+the Pebble app. Sit as usual, stop with Back twice, then press **Down** on the
+summary screen: a scrollable list shows `start 07:02`, each marker as
+`30:00 HALF` / `60:00 END` (with `late 105s` when it was delivered after its
+due second), and `stop 72:10`. An `ABORT` line means the session window closed
+without a stop; no stop line at all means the app was killed. The log is kept
+across app restarts until the next session starts. Normal builds (without
+`MARKER_DIAG=1`) contain none of this.
+
 ## Architecture
 
 The behavioural core is a single **pure function** of `(elapsed seconds,
@@ -112,6 +130,7 @@ drift** across long sittings.
 | `src/c/quiet_window.c`  | the "turn on Quiet Time" reminder                     |
 | `src/c/session_window.c`| the running session, confirm-stop, summary            |
 | `src/c/markers.c`       | the pure cycle/tick/half/end scheduler                |
+| `src/c/diag.c`          | marker diagnostics log, `MARKER_DIAG=1` builds only   |
 | `src/c/locale.c`        | system-language string tables (EN/IT/ES/FR/DE/PT)     |
 
 Markers are driven by the same RTC-based `tick_timer_service` that updates the
