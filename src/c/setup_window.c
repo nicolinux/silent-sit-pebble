@@ -112,11 +112,14 @@ static void relayout(void) {
 // Rebuild the config summary from the live g_config. Called on every appear so
 // returning from the settings menu reflects any change immediately.
 static void refresh_summary(void) {
+  bool half = g_config.half_enabled;
   if (g_config.interval_min == 0) {
-    snprintf(s_summary, sizeof(s_summary), L(MSG_HOME_SUMMARY_OFF),
+    snprintf(s_summary, sizeof(s_summary),
+             L(half ? MSG_HOME_SUMMARY_OFF_HALF : MSG_HOME_SUMMARY_OFF),
              g_config.duration_min);
   } else {
-    snprintf(s_summary, sizeof(s_summary), L(MSG_HOME_SUMMARY),
+    snprintf(s_summary, sizeof(s_summary),
+             L(half ? MSG_HOME_SUMMARY_HALF : MSG_HOME_SUMMARY),
              g_config.duration_min, g_config.interval_min);
   }
   if (s_summary_layer) {

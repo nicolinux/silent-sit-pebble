@@ -3,12 +3,13 @@
 #include "session_window.h"
 #include "locale.h"
 
-// The settings menu: a 4-row MenuLayer reached with DOWN from the home screen.
+// The settings menu: a 5-row MenuLayer reached with DOWN from the home screen.
 //
 //   Row 0  Durata       "30 min"          -> cycles the cycle length
 //   Row 1  Intervallo   "10 min" / "off"  -> cycles the tick interval
-//   Row 2  Vibrazione   "Leggero"/...     -> cycles the buzz strength
-//   Row 3  Azzera tot.  "12,5 h"          -> wipes the lifetime tally (2 taps)
+//   Row 2  Halfway buzz "on" / "off"      -> toggles the mid-cycle buzz
+//   Row 3  Vibrazione   "Leggero"/...     -> cycles the buzz strength
+//   Row 4  Azzera tot.  "12,5 h"          -> wipes the lifetime tally (2 taps)
 //
 // SELECT on a value row cycles it (with wrap) and persists immediately. The
 // reset row is destructive, so it arms on the first SELECT (subtitle becomes
@@ -24,9 +25,10 @@ static const uint8_t STRENGTHS[] = {VIBE_LIGHT, VIBE_MEDIUM, VIBE_STRONG};
 
 #define ROW_DURATION 0
 #define ROW_INTERVAL 1
-#define ROW_STRENGTH 2
-#define ROW_RESET    3
-#define NUM_ROWS     4
+#define ROW_HALF     2
+#define ROW_STRENGTH 3
+#define ROW_RESET    4
+#define NUM_ROWS     5
 
 static Window    *s_window;
 static MenuLayer *s_menu;
@@ -77,6 +79,10 @@ static void draw_row(GContext *ctx, const Layer *cell, MenuIndex *idx, void *dat
       format_interval(g_config.interval_min, sub, sizeof(sub));
       menu_cell_basic_draw(ctx, cell, L(MSG_TICK_INTERVAL), sub, NULL);
       break;
+    case ROW_HALF:
+      menu_cell_basic_draw(ctx, cell, L(MSG_HALF_BUZZ),
+                           g_config.half_enabled ? "on" : "off", NULL);
+      break;
     case ROW_STRENGTH:
       menu_cell_basic_draw(ctx, cell, L(MSG_VIBE_STRENGTH),
                            strength_label(g_config.vibe_strength), NULL);
@@ -113,6 +119,10 @@ static void select_click(MenuLayer *ml, MenuIndex *idx, void *data) {
       break;
     case ROW_INTERVAL:
       g_config.interval_min = cycle_value(INTERVALS, N_INTERVALS, g_config.interval_min);
+      break;
+    case ROW_HALF:
+      g_config.half_enabled = !g_config.half_enabled;
+      if (g_config.half_enabled) vibe_preview_half(g_config.vibe_strength);   // feel it; off is silent
       break;
     case ROW_STRENGTH:
       g_config.vibe_strength = cycle_value(STRENGTHS, N_STRENGTHS, g_config.vibe_strength);

@@ -18,12 +18,18 @@ static int g_failures = 0;
 
 #define HORIZON 7200   // seconds covered by the sequence tests
 
-static SilentSitConfig make_cfg(int duration, int interval) {
+static SilentSitConfig make_cfg_half(int duration, int interval, int half) {
   SilentSitConfig cfg;
   cfg.duration_min = (uint8_t)duration;
   cfg.interval_min = (uint8_t)interval;
   cfg.vibe_strength = VIBE_MEDIUM;
+  cfg.half_enabled = (uint8_t)half;
   return cfg;
+}
+
+// Halfway buzz on: the configuration all the pre-existing expectations assume.
+static SilentSitConfig make_cfg(int duration, int interval) {
+  return make_cfg_half(duration, interval, 1);
 }
 
 typedef struct { int at; MarkerEvent ev; } Expected;
@@ -250,6 +256,76 @@ static void test_latest_marker_in(void) {
   CHECK(latest_marker_in(0, 5000, make_cfg(0, 10), &ev) == -1);
 }
 
+// Halfway buzz off: no HALF marker is ever produced, by any of the three
+// functions; the other markers are unchanged.
+static void test_half_disabled(void) {
+  static const Expected a[] = {{3600, MARKER_END}, {7200, MARKER_END}};
+  static const Expected b[] = {
+    {600, MARKER_TICK}, {1200, MARKER_TICK}, {1800, MARKER_TICK}, {2400, MARKER_TICK},
+    {3000, MARKER_TICK}, {3600, MARKER_END}, {4200, MARKER_TICK}, {4800, MARKER_TICK},
+    {5400, MARKER_TICK}, {6000, MARKER_TICK}, {6600, MARKER_TICK}, {7200, MARKER_END},
+  };
+  static const Expected c[] = {
+    {1800, MARKER_TICK}, {2700, MARKER_END}, {3600, MARKER_TICK},
+  };
+  SilentSitConfig cfg;
+  MarkerEvent ev;
+
+  cfg = make_cfg_half(60, 0, 0);          // "no ticks" = one buzz per cycle
+  for (int i = 0; i < 2; i++) {
+    int t = next_marker_after(i ? a[0].at : 0, cfg, &ev);
+    CHECK(t == a[i].at);
+    CHECK(ev == a[i].ev);
+  }
+  CHECK(marker_for_elapsed(1800, cfg) == MARKER_NONE);
+  CHECK(latest_marker_in(0, 3599, cfg, &ev) == -1);   // half would have been 1800
+  CHECK(latest_marker_in(0, 3600, cfg, &ev) == 3600);
+  CHECK(ev == MARKER_END);
+
+  cfg = make_cfg_half(60, 10, 0);         // ticks at 1800/5400 instead of HALF
+  int t = 0;
+  for (int i = 0; i < 12; i++) {
+    t = next_marker_after(t, cfg, &ev);
+    CHECK(t == b[i].at);
+    CHECK(ev == b[i].ev);
+  }
+  CHECK(latest_marker_in(1700, 1900, cfg, &ev) == 1800);
+  CHECK(ev == MARKER_TICK);
+
+  cfg = make_cfg_half(45, 30, 0);
+  t = 0;
+  for (int i = 0; i < 3; i++) {
+    t = next_marker_after(t, cfg, &ev);
+    CHECK(t == c[i].at);
+    CHECK(ev == c[i].ev);
+  }
+
+  // Exhaustive: no HALF anywhere, and the three functions agree.
+  static const int durations[] = {10, 15, 20, 30, 45, 60};
+  static const int intervals[] = {0, 10, 30};
+  for (int d = 0; d < 6; d++) {
+    for (int i = 0; i < 3; i++) {
+      SilentSitConfig off = make_cfg_half(durations[d], intervals[i], 0);
+      int prev = 0;
+      for (int s = 1; s <= HORIZON; s++) {
+        MarkerEvent e = marker_for_elapsed(s, off);
+        CHECK(e != MARKER_HALF);
+        if (e != MARKER_NONE) {
+          MarkerEvent ne = MARKER_NONE, le = MARKER_NONE;
+          CHECK(next_marker_after(prev, off, &ne) == s);
+          CHECK(ne == e);
+          CHECK(latest_marker_in(prev, s, off, &le) == s);
+          CHECK(le == e);
+          prev = s;
+        }
+      }
+    }
+  }
+
+  // Half on: unchanged (60/0 keeps its HALF at 1800).
+  CHECK(marker_for_elapsed(1800, make_cfg(60, 0)) == MARKER_HALF);
+}
+
 int main(void) {
   test_known_sequences();
   test_full_sequences();
@@ -258,6 +334,7 @@ int main(void) {
   test_strictly_greater();
   test_no_cycle();
   test_latest_marker_in();
+  test_half_disabled();
 
   if (g_failures) {
     printf("FAILED: %d of %d checks\n", g_failures, g_checks);

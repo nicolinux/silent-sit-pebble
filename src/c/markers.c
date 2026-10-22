@@ -9,7 +9,8 @@
 //
 // is_end  : pos wrapped back to 0 (and we are past the very start) -> restart
 // is_half : exactly half-way through the cycle (always integer seconds, since
-//           durations are whole minutes -> half is a multiple of 30s)
+//           durations are whole minutes -> half is a multiple of 30s); only
+//           when cfg.half_enabled, otherwise there is no half marker at all
 // is_tick : on a periodic tick boundary
 //
 // Collision rule: the triple wins. If a periodic tick lands on the same second
@@ -24,7 +25,7 @@ MarkerEvent marker_for_elapsed(int elapsed, SilentSitConfig cfg) {
   int tick = (int)cfg.interval_min * 60;
 
   bool is_end  = (pos == 0);
-  bool is_half = (pos == cycle / 2);
+  bool is_half = cfg.half_enabled && (pos == cycle / 2);
   bool is_tick = (tick > 0) && (elapsed % tick == 0);
 
   if (is_end)  return MARKER_END;    // end wins over a coincident tick
@@ -34,7 +35,7 @@ MarkerEvent marker_for_elapsed(int elapsed, SilentSitConfig cfg) {
 }
 
 // Smallest marker position strictly greater than `elapsed`. The candidates are
-// the next end, the next half, and (if enabled) the next tick; the earliest of
+// the next end, and (if enabled) the next half and the next tick; the earliest of
 // them is the answer. The event type at that instant is taken from the pure
 // marker_for_elapsed(), so collision precedence is reused, not re-derived.
 int next_marker_after(int elapsed, SilentSitConfig cfg, MarkerEvent *out_event) {
@@ -49,10 +50,12 @@ int next_marker_after(int elapsed, SilentSitConfig cfg, MarkerEvent *out_event) 
   long next_end = ((long)(elapsed / cycle) + 1) * cycle;
 
   // Next half: positions half, half+cycle, half+2*cycle, … first one > elapsed.
-  long k = (elapsed >= half) ? ((long)(elapsed - half) / cycle + 1) : 0;
-  long next_half = half + k * cycle;
-
-  long best = (next_half < next_end) ? next_half : next_end;
+  long best = next_end;
+  if (cfg.half_enabled) {
+    long k = (elapsed >= half) ? ((long)(elapsed - half) / cycle + 1) : 0;
+    long next_half = half + k * cycle;
+    if (next_half < best) best = next_half;
+  }
 
   if (tick > 0) {
     long next_tick = ((long)(elapsed / tick) + 1) * tick;
@@ -65,7 +68,7 @@ int next_marker_after(int elapsed, SilentSitConfig cfg, MarkerEvent *out_event) 
 
 // Latest marker in (after, elapsed]. Every marker is an end, a half or a tick,
 // each periodic, so the latest marker at or before `elapsed` is the largest of
-// the latest end, latest half and latest tick (the ones <= elapsed). If that is
+// the latest end, latest half (if enabled) and latest tick (the ones <= elapsed). If that is
 // not past `after` (or not positive), nothing is due. The event type again comes
 // from marker_for_elapsed() so collision precedence is shared, not re-derived.
 int latest_marker_in(int after, int elapsed, SilentSitConfig cfg, MarkerEvent *out_event) {
@@ -77,7 +80,7 @@ int latest_marker_in(int after, int elapsed, SilentSitConfig cfg, MarkerEvent *o
   int half = cycle / 2;
 
   long best = ((long)(elapsed / cycle)) * cycle;                     // latest end
-  if (elapsed >= half) {                                             // latest half
+  if (cfg.half_enabled && elapsed >= half) {                         // latest half
     long h = half + ((long)(elapsed - half) / cycle) * cycle;
     if (h > best) best = h;
   }

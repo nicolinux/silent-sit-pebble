@@ -28,6 +28,8 @@ static void config_load(void) {
       ? (uint8_t)persist_read_int(PKEY_INTERVAL) : DEFAULT_INTERVAL;
   g_config.vibe_strength = persist_exists(PKEY_STRENGTH)
       ? (uint8_t)persist_read_int(PKEY_STRENGTH) : DEFAULT_STRENGTH;
+  g_config.half_enabled = persist_exists(PKEY_HALF)
+      ? (uint8_t)persist_read_int(PKEY_HALF) : DEFAULT_HALF;
   s_total_seconds = persist_exists(PKEY_TOTAL_SECS)
       ? (uint32_t)persist_read_int(PKEY_TOTAL_SECS) : 0;
 }
@@ -84,6 +86,7 @@ void config_save(void) {
   persist_write_int(PKEY_DURATION, g_config.duration_min);
   persist_write_int(PKEY_INTERVAL, g_config.interval_min);
   persist_write_int(PKEY_STRENGTH, g_config.vibe_strength);
+  persist_write_int(PKEY_HALF, g_config.half_enabled);
 }
 
 // Router: from setup's "Inizia". If Quiet Time is already on, start straight

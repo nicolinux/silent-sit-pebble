@@ -15,6 +15,9 @@ typedef enum {
   MSG_START,           // home screen action, incl. the noun ("Inizia seduta")
   MSG_HOME_SUMMARY,    // home config line, fmt(duration, interval): "30 min, a tick every 10 min"
   MSG_HOME_SUMMARY_OFF,// home config line when ticks are off, fmt(duration): "30 min, no ticks"
+  MSG_HOME_SUMMARY_HALF,    // as MSG_HOME_SUMMARY, plus the halfway buzz is on
+  MSG_HOME_SUMMARY_OFF_HALF,// as MSG_HOME_SUMMARY_OFF, plus the halfway buzz is on
+  MSG_HALF_BUZZ,       // settings row: halfway buzz on/off
   MSG_DURATION,        // settings row: expected session length
   MSG_TICK_INTERVAL,   // settings row: tick interval
   MSG_VIBE_STRENGTH,   // settings row: vibration strength

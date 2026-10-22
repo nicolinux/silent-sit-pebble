@@ -91,14 +91,20 @@ static void vibe_tick(void) {
   vibe_play(seg, 1, g_config.vibe_strength);
 }
 
+static const uint32_t HALF_SEG[] = {110, 140, 110};   // medium double
+
 static void vibe_half(void) {
-  static const uint32_t seg[] = {110, 140, 110};   // medium double
-  vibe_play(seg, 3, g_config.vibe_strength);
+  vibe_play(HALF_SEG, 3, g_config.vibe_strength);
 }
 
 static void vibe_end(void) {
   static const uint32_t seg[] = {300, 150, 300};   // two long "gong" pulses
   vibe_play(seg, 3, g_config.vibe_strength);
+}
+
+// Settings preview of the halfway pattern, played when the row is toggled on.
+void vibe_preview_half(uint8_t strength) {
+  vibe_play(HALF_SEG, 3, strength);
 }
 
 // Settings preview: a single tap at the chosen strength (the tick texture is the

@@ -6,11 +6,13 @@
 #define PKEY_DURATION 1
 #define PKEY_INTERVAL 2
 #define PKEY_STRENGTH 3
+#define PKEY_HALF 5         // halfway buzz on/off
 #define PKEY_TOTAL_SECS 4   // lifetime meditation time, accumulated across sedute
 
 #define DEFAULT_DURATION 30        // minutes
 #define DEFAULT_INTERVAL 10        // minutes
 #define DEFAULT_STRENGTH VIBE_MEDIUM
+#define DEFAULT_HALF 0             // halfway buzz off: "no ticks" = one buzz per cycle
 
 // The single source of truth for the session config, owned by main.c.
 extern SilentSitConfig g_config;

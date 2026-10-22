@@ -37,7 +37,7 @@ that repeats for as long as you sit, without breaking the rhythm.
   meditated with the app.
 - Press **Down** to open **settings**, a short menu to cycle the **duration**
   (10 / 15 / 20 / 30 / 45 / 60 min), **tick interval** (10 min / 30 min / off),
-  and **vibration strength** (Light / Medium / Strong). **Select** cycles a
+  the **halfway buzz** (on / off, default off), and **vibration strength** (Light / Medium / Strong). **Select** cycles a
   value; **Back** returns to the home screen with its summary updated. A final
   row resets the lifetime total — a two-press confirm guards against a stray tap.
 - The configuration and the lifetime total are **persisted** and survive closing
