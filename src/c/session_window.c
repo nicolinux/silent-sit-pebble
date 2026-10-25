@@ -103,6 +103,18 @@ static void vibe_end(void) {
   vibe_play(seg, 3, g_config.vibe_strength);
 }
 
+#ifdef MARKER_DIAG
+// The vibration self-test (vibe_test.c) plays the real marker patterns.
+void vibe_play_marker(MarkerEvent ev) {
+  switch (ev) {
+    case MARKER_END:  vibe_end();  break;
+    case MARKER_HALF: vibe_half(); break;
+    case MARKER_TICK: vibe_tick(); break;
+    default: break;
+  }
+}
+#endif
+
 // Settings preview of the halfway pattern, played when the row is toggled on.
 void vibe_preview_half(uint8_t strength) {
   vibe_play(HALF_SEG, 3, strength);
@@ -318,6 +330,9 @@ static void confirm_timeout(void *data) {
 // --- Tick (minute normally, second near a marker) -----------------------------
 
 static void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
+#ifdef MARKER_DIAG
+  if (units_changed & MINUTE_UNIT) diag_minute();   // sample before any marker is logged
+#endif
   service_session();
 }
 

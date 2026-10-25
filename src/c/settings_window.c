@@ -28,7 +28,13 @@ static const uint8_t STRENGTHS[] = {VIBE_LIGHT, VIBE_MEDIUM, VIBE_STRONG};
 #define ROW_HALF     2
 #define ROW_STRENGTH 3
 #define ROW_RESET    4
+#ifdef MARKER_DIAG
+#include "diag.h"
+#define ROW_VIBE_TEST 5   // diagnostics build only: vibration self-test (vibe_test.c)
+#define NUM_ROWS      6
+#else
 #define NUM_ROWS     5
+#endif
 
 static Window    *s_window;
 static MenuLayer *s_menu;
@@ -95,6 +101,11 @@ static void draw_row(GContext *ctx, const Layer *cell, MenuIndex *idx, void *dat
         menu_cell_basic_draw(ctx, cell, L(MSG_RESET_TOTAL), sub, NULL);
       }
       break;
+#ifdef MARKER_DIAG
+    case ROW_VIBE_TEST:
+      menu_cell_basic_draw(ctx, cell, "Vibe test", "10x, 10 s apart", NULL);
+      break;
+#endif
   }
 }
 
@@ -112,6 +123,13 @@ static void select_click(MenuLayer *ml, MenuIndex *idx, void *data) {
     menu_layer_reload_data(s_menu);
     return;
   }
+
+#ifdef MARKER_DIAG
+  if (idx->row == ROW_VIBE_TEST) {
+    vibe_test_push();
+    return;
+  }
+#endif
 
   switch (idx->row) {
     case ROW_DURATION:

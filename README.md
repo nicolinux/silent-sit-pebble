@@ -159,13 +159,59 @@ MARKER_DIAG=1 pebble build            # build/silent-sit-pebble.pbw, with the lo
 ```
 
 Sideload it on iPhone by AirDropping the `.pbw` to the phone and opening it in
-the Pebble app. Sit as usual, stop with Back twice, then press **Down** on the
-summary screen: a scrollable list shows `start 07:02`, each marker as
-`30:00 HALF` / `60:00 END` (with `late 105s` when it was delivered after its
-due second), and `stop 72:10`. An `ABORT` line means the session window closed
-without a stop; no stop line at all means the app was killed. The log is kept
-across app restarts until the next session starts. Normal builds (without
-`MARKER_DIAG=1`) contain none of this.
+the Pebble app. Sit as usual and stop with Back twice. The diagnostics build
+then does three things:
+
+- **Asks "felt it?"** for every marker delivered in that sitting, oldest first
+  (`60:00 END`, with a `1 / 2` counter): **Up** = yes, **Down** = no, **Select**
+  = not sure. Back skips the remaining questions (they stay "not sure"). A
+  sitting with no markers asks nothing. Afterwards you land on the summary.
+- **Records context** with START, every marker and STOP: battery percent (a `+`
+  after it means charging), phone connected (`ph`), Quiet Time active (`QT`) and
+  *still minutes* (`sN`). Still minutes replicate the firmware's Stand-By Mode
+  heuristic: once a minute the app samples the accelerometer and counts
+  consecutive minutes whose movement (|dx|+|dy|+|dz| against the previous
+  minute) is under 50; any movement resets the count. An `s30` or more at a
+  marker means Stand-By Mode (which silently drops vibrations) had most likely
+  engaged. The accelerometer is only running during a sitting, at 10 Hz.
+- **Keeps a history** of the last 10 sittings (the oldest is overwritten), saved
+  on every record so a crash still leaves it.
+
+Press **Down** on the summary screen to read it. The newest sitting (`#1`) opens
+first; **Select** steps to the next older one (wrapping round), **Up**/**Down**
+scroll. Each sitting reads like:
+
+```
+#1 10-25 17:13            date and time it started
+60m tick off half on Med  duration, tick interval, halfway buzz, strength
+start bat 82% ph QT
+30:00 HALF yes s29 82% ph
+60:00 END NO s59 81%+ ph QT
+stop 60:58 s59 81% ph QT
+```
+
+Marker lines are `elapsed KIND [late Ns] felt sN battery`, where `late 105s`
+means it was delivered after its due second and felt is `yes` / `NO` / `?` (not
+sure or not asked). An `ABORT` line means the session window closed without a
+stop; no stop line at all (`(no stop: killed?)`) means the app was killed. A
+full sitting (27 records) drops its oldest marker lines but keeps START. Normal
+builds (without `MARKER_DIAG=1`) contain none of this.
+
+**Vibration self-test.** The diagnostics build adds a **Vibe test** row at the
+bottom of the settings menu. Pick `TICK` / `HALF` / `END` with Up/Down (default
+END) and press Select: the real marker pattern plays at the current strength 10
+times, 10 s apart (`END 3/10`), then it asks `How many did you feel?` (Up/Down =
+0-10, Select = save). Back at any point cancels with no result. The result is
+stored as its own history entry, paged with Select like a sitting:
+
+```
+#1 10-25 18:02
+vibe test Med
+TEST END felt 7/10 bat 64%
+```
+
+It is short and attended, so Stand-By Mode cannot be the cause: pulses missed
+here point at the motor or the pattern itself.
 
 ## Publishing to the appstore
 

@@ -61,37 +61,28 @@ Committed (all SSH-signed), issues #1–#5 on GitHub:
 | a32cade | — | German wording "Halbzeit-Vibration" |
 | d9b1109 | #5 | Docs, settings screenshot, version 1.2.0 |
 | ecdf58e | — | Ticket specs 00–05 |
-| (this) | — | This handoff + ticket specs 06/07 (issues #6/#7 **not yet posted** to GitHub; assumed numbers) |
+| (this) | — | This handoff + ticket specs 06/07 (issues #6/#7) |
 
-**Uncommitted in the working tree** (implementation of 06/07 — kept uncommitted until checked on screen; 06 and 07 share `diag.c`, so one combined commit closing both is fine):
+Diagnostics v2 + vibe self-test (issues #6/#7), committed together because
+both extend `diag.c`; **checked on the watch by the user (2026-10-25)**:
 
-- Ticket 06 implementation: `src/c/diag.c/.h`, `session_window.c` — per-session
-  settings line, "felt it?" yes/no questions after each sitting, battery /
-  phone / Quiet Time / **still-minutes** (app replica of the firmware rule, via
-  `accel_data_service_subscribe(25, …)` at 10 Hz) per marker, history of the
-  last 10 sessions (persist keys 100–109, newest index in 110; Select pages
-  sessions in the viewer).
-- Ticket 07 implementation: `src/c/vibe_test.c` (new), `diag.c/.h`,
-  `session_window.c/.h` (`vibe_play_marker`), `settings_window.c` ("Vibe test"
-  row, diag builds only) — plays TICK/HALF/END 10× every 10 s, asks how many
-  were felt, stores a TEST entry in the history.
-- README "Diagnostics build" section updated for both.
-- Verified: host tests pass; `MARKER_DIAG=1 pebble build` has no new warnings;
-  plain `.pbw` unchanged (21619 B, no diag symbols).
-- **Not verified on screen** (emulator blocked): question window, history
-  viewer, self-test window, and whether lines like `60:00 END NO s59 81%+ ph QT`
-  or `END 10/10` (Bitham 30) wrap at 200 px.
-- `build/SilentSit-1.2.0-diag2.pbw` = diag build with 06+07 (unverified UI);
-  `build/` is otherwise a plain build. `.claude/` is untracked and unrelated.
+- Ticket 06: per-session settings line, "felt it?" yes/no questions after each
+  sitting, battery / phone / Quiet Time / **still-minutes** (app replica of the
+  firmware rule, via `accel_data_service_subscribe(25, …)` at 10 Hz) per
+  marker, history of the last 10 sessions (persist keys 100–109, newest index
+  in 110; Select pages sessions in the viewer).
+- Ticket 07: `src/c/vibe_test.c` + "Vibe test" settings row (diag builds only)
+  — plays TICK/HALF/END 10× every 10 s, asks how many were felt, stores a TEST
+  entry in the history.
+- Plain `.pbw` unchanged (21619 B, no diag symbols); host tests pass.
+- `build/SilentSit-1.2.0-diag2.pbw` = this diag build.
 
 ## Next steps
 
 1. Get the user's result with **Stand-By Mode off**. If the END buzz is then
    reliable, the root cause is confirmed.
-2. Once local port binding is allowed: emulator-check 06/07 screens (flow in
-   the ticket files), fix any wrapping (e.g. drop `%`/`+`, use
-   `FONT_KEY_GOTHIC_28_BOLD` for the test counter), then commit 06 and 07
-   separately with `Closes #6` / `Closes #7`.
+2. Read the diag v2 history after sittings: unfelt markers with still-minutes
+   ≥ 30 confirm Stand-By Mode; the vibe self-test separates motor issues.
 3. If Stand-By is confirmed, propose to the user:
    - an in-app hint (e.g. on the Quiet Time reminder / first run: "Turn off
      Stand-By Mode in Settings → System for reliable buzzes") + README/STORE
