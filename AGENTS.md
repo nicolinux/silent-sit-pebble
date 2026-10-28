@@ -41,6 +41,10 @@ Read [`README.md`](README.md) first — it is the source of truth for behaviour,
 | `STORE.txt` | appstore listing description |
 | `build/` | waf output — generated, gitignored, never edit |
 
+## Working rules
+
+- **Coding is done by subagents on Sonnet, reviewed by a subagent on Opus.** Never write code inline in the main session: delegate each coding task (one ticket/task per agent) to a subagent with `model: sonnet` and a self-contained brief, then have a separate subagent with `model: opus` review the diff before reporting back. The main session coordinates, checks the build and host tests, and reports.
+
 ## Conventions & gotchas
 
 - **Marker timing is a pure function** of `(elapsed seconds, config)` — every tick/half/end and the infinite loop derive from absolute elapsed time (zero drift). Keep new timing logic in `markers.c` and keep it pure; don't accumulate time across timers.
